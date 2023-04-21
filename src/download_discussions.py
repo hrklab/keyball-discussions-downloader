@@ -1,84 +1,78 @@
 import requests
 import json
 import time
+import os
 
-github_token = "your_github_token"
+class GitHubDiscussion:
+    def __init__(self, token, owner, repo):
+        self.token = token
+        self.owner = owner
+        self.repo = repo
+        self.url = "https://api.github.com/graphql"
+        self.headers = {"Authorization": f"bearer {self.token}"}
 
-import json
+    def run_graphql_query(self, query):
+        data = {"query": query}
+        response = requests.post(self.url, headers=self.headers, json=data)
 
-def run_graphql_query(query, token):
-    url = "https://api.github.com/graphql"
-    headers = {"Authorization": f"bearer {token}"}
-    data = {"query": query}
-    response = requests.post(url, headers=headers, json=data)
+        if response.status_code != 200:
+            raise Exception(f"Error running GraphQL query: {response.status_code}")
 
-    if response.status_code != 200:
-        raise Exception(f"Error running GraphQL query: {response.status_code}")
+        return response.json()
 
-    return response.json()
-
-def get_discussion_and_comments(owner, repo, discussion_number, token):
-    query = f"""
-    {{
-      repository(owner: "{owner}", name: "{repo}") {{
-        discussion(number: {discussion_number}) {{
-          title
-          body
-          comments(first: 100) {{
-            nodes {{
-              author {{
-                login
-              }}
+    def get_discussion_and_comments(self, discussion_number):
+        query = f"""
+        {{
+          repository(owner: "{self.owner}", name: "{self.repo}") {{
+            discussion(number: {discussion_number}) {{
+              title
               body
-              replies(first: 100) {{
+              comments(first: 100) {{
                 nodes {{
                   author {{
                     login
                   }}
                   body
+                  replies(first: 100) {{
+                    nodes {{
+                      author {{
+                        login
+                      }}
+                      body
+                    }}
+                  }}
                 }}
               }}
             }}
           }}
         }}
-      }}
-    }}
-    """
+        """
 
-    response_data = run_graphql_query(query, token)
-    return response_data["data"]["repository"]["discussion"]
+        response_data = self.run_graphql_query(query)
+        return response_data["data"]["repository"]["discussion"]
 
-owner = "Yowkees"
-repo = "keyball"
-discussion_number = 215
+    @staticmethod
+    def format_discussion_as_markdown(discussion_data):
+        markdown_output = f"# {discussion_data['title']}\n\n{discussion_data['body']}\n\n---\n\n"
 
-discussion_data = get_discussion_and_comments(owner, repo, discussion_number, github_token)
+        for i, comment in enumerate(discussion_data["comments"]["nodes"], 1):
+            markdown_output += f"## Comment {i} by {comment['author']['login']}\n\n{comment['body']}\n\n"
 
-print("Title:", discussion_data["title"])
-print("Body:", discussion_data["body"])
+            for j, reply in enumerate(comment["replies"]["nodes"], 1):
+                markdown_output += f"### Reply {j} by {reply['author']['login']}\n\n{reply['body']}\n\n"
 
-for i, comment in enumerate(discussion_data["comments"]["nodes"], 1):
-    print(f"Comment {i} by {comment['author']['login']}:")
-    print(comment["body"])
-    for j, reply in enumerate(comment["replies"]["nodes"], 1):
-        print(f"  Reply {j} by {reply['author']['login']}:")
-        print("  " + reply["body"])
-
-def format_discussion_as_markdown(discussion_data):
-    markdown_output = f"# {discussion_data['title']}\n\n{discussion_data['body']}\n\n---\n\n"
-
-    for i, comment in enumerate(discussion_data["comments"]["nodes"], 1):
-        markdown_output += f"## Comment {i} by {comment['author']['login']}\n\n{comment['body']}\n\n"
-
-        for j, reply in enumerate(comment["replies"]["nodes"], 1):
-            markdown_output += f"### Reply {j} by {reply['author']['login']}\n\n{reply['body']}\n\n"
-
-    return markdown_output
+        return markdown_output
 
 
-markdown_output = format_discussion_as_markdown(discussion_data)
+    def save_markdown_output(self, discussion_number):
+        discussion_data = self.get_discussion_and_comments(discussion_number)
+        markdown_output = self.format_discussion_as_markdown(discussion_data)
 
-filename = f"../docs/md/discussion_{discussion_number}_output.md"
+        directory = "./../docs/md/"
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
-with open(filename, "w", encoding="utf-8") as file:
-    file.write(markdown_output)
+        filename = f"{directory}discussion_{discussion_number}_output.md"
+
+        with open(filename, "w", encoding="utf-8") as file:
+            file.write(markdown_output)
