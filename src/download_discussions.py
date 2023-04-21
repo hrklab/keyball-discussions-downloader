@@ -76,3 +76,19 @@ class GitHubDiscussion:
 
         with open(filename, "w", encoding="utf-8") as file:
             file.write(markdown_output)
+
+
+github_token = "your_github_token"
+owner = "Yowkees"
+repo = "keyball"
+
+start_discussion_number = 1
+end_discussion_number = 221
+
+for discussion_number in range(start_discussion_number, end_discussion_number + 1):
+    try:
+        github_discussion = GitHubDiscussion(github_token, owner, repo)
+        github_discussion.save_markdown_output(discussion_number)
+        print(f"Saved discussion {discussion_number}.")
+    except Exception as e:
+        print(f"Error in saving discussion {discussion_number}: {e}")
